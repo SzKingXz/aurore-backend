@@ -15,7 +15,7 @@ const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5173/callback
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 app.use(cors({
-    origin: [FRONTEND_URL, 'https://szkingxz.github.io'],
+    origin: '*',
     credentials: true
 }));
 app.use(express.json());
@@ -62,6 +62,23 @@ client.on('error', (error) => {
 
 client.login(TOKEN).catch(err => {
     console.error('❌ Error al conectar el bot:', err);
+});
+
+// Root route
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'online',
+        message: 'AURØRE Backend API',
+        version: '1.0.0',
+        endpoints: {
+            health: '/api/health',
+            auth: '/api/auth/discord',
+            callback: '/api/auth/callback',
+            botInfo: '/api/bot/info',
+            userServers: '/api/user/servers',
+            serverDetails: '/api/server/:serverId'
+        }
+    });
 });
 
 // Health check
