@@ -1,0 +1,301 @@
+// server.cjs - Backend con Discord OAuth2
+const express = require('express');
+const cors = require('cors');
+const { Client, GatewayIntentBits } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Configuración OAuth2
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
+const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5173/callback';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+app.use(cors({
+    origin: [FRONTEND_URL, 'https://szkingxz.github.io'],
+    credentials: true
+}));
+app.use(express.json());
+
+const TOKEN = process.env.DISCORD_BOT_TOKEN;
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences
+    ]
+});
+
+const DB_FILE = path.join(__dirname, '..', 'AURØRE SYSTEM v1 (Discontinued)', 'Discord', 'levels.json');
+
+function loadDB() {
+    try {
+        if (!fs.existsSync(DB_FILE)) {
+            console.log('⚠️ Archivo levels.json no encontrado');
+            return {};
+        }
+        const data = fs.readFileSync(DB_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        console.error('Error leyendo levels.json:', error);
+        return {};
+    }
+}
+
+client.once('ready', () => {
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log(`║  ✅ Bot conectado: ${client.user.tag.padEnd(23)} ║`);
+    console.log(`║  📊 Servidores: ${client.guilds.cache.size.toString().padEnd(26)} ║`);
+    console.log(`║  🌐 API: http://localhost:${PORT.toString().padEnd(18)} ║`);
+    console.log('╚════════════════════════════════════════════╝\n');
+});
+
+client.on('error', (error) => {
+    console.error('❌ Error del bot Discord:', error);
+});
+
+client.login(TOKEN).catch(err => {
+    console.error('❌ Error al conectar el bot:', err);
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', bot: client.user ? 'connected' : 'disconnected' });
+});
+
+// OAuth2 - Obtener URL de autorización
+app.get('/api/auth/discord', (req, res) => {
+    const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify%20guilds`;
+    res.json({ url: authUrl });
+});
+
+// OAuth2 - Callback (exchange code for token)
+app.post('/api/auth/callback', async (req, res) => {
+    const { code } = req.body;
+    
+    try {
+        // Exchange code for access token
+        const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                client_id: DISCORD_CLIENT_ID,
+                client_secret: DISCORD_CLIENT_SECRET,
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: REDIRECT_URI,
+            }),
+        });
+
+        const tokenData = await tokenResponse.json();
+        
+        if (!tokenData.access_token) {
+            return res.status(400).json({ error: 'Failed to get access token' });
+        }
+
+        // Get user info
+        const userResponse = await fetch('https://discord.com/api/users/@me', {
+            headers: {
+                Authorization: `Bearer ${tokenData.access_token}`,
+            },
+        });
+
+        const userData = await userResponse.json();
+
+        res.json({
+            user: {
+                id: userData.id,
+                username: userData.username,
+                discriminator: userData.discriminator,
+                avatar: userData.avatar ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png` : null
+            },
+            accessToken: tokenData.access_token
+        });
+    } catch (error) {
+        console.error('Error en OAuth2:', error);
+        res.status(500).json({ error: 'Authentication failed' });
+    }
+});
+
+// Bot info
+app.get('/api/bot/info', (req, res) => {
+    if (!client.user) {
+        return res.status(503).json({ error: 'Bot no conectado' });
+    }
+    res.json({
+        id: client.user.id,
+        username: client.user.username,
+        avatar: client.user.displayAvatarURL(),
+        servers: client.guilds.cache.size,
+        uptime: process.uptime(),
+        ping: client.ws.ping
+    });
+});
+
+// User servers
+app.get('/api/user/servers', async (req, res) => {
+    try {
+        if (!client.user) {
+            return res.status(503).json({ error: 'Bot no conectado' });
+        }
+
+        const servers = client.guilds.cache.map(guild => ({
+            id: guild.id,
+            name: guild.name,
+            icon: guild.iconURL({ size: 256 }) || null,
+            memberCount: guild.memberCount,
+            ownerId: guild.ownerId,
+            hasBot: true
+        }));
+
+        res.json({ servers });
+    } catch (error) {
+        console.error('Error obteniendo servidores:', error);
+        res.status(500).json({ error: 'Error al obtener servidores' });
+    }
+});
+
+// Server details
+app.get('/api/server/:serverId', async (req, res) => {
+    try {
+        const { serverId } = req.params;
+        
+        if (!client.user) {
+            return res.status(503).json({ error: 'Bot no conectado' });
+        }
+
+        const guild = client.guilds.cache.get(serverId);
+
+        if (!guild) {
+            return res.status(404).json({ error: 'Servidor no encontrado' });
+        }
+
+        await guild.members.fetch().catch(() => console.log('No se pudieron obtener todos los miembros'));
+        const members = guild.members.cache;
+        const onlineMembers = members.filter(m => 
+            m.presence?.status === 'online' || 
+            m.presence?.status === 'idle' || 
+            m.presence?.status === 'dnd'
+        ).size;
+        const offlineMembers = members.size - onlineMembers;
+
+        const channels = guild.channels.cache;
+        const textChannels = channels.filter(c => c.type === 0).size;
+        const voiceChannels = channels.filter(c => c.type === 2).size;
+        const categories = channels.filter(c => c.type === 4).size;
+
+        const roles = guild.roles.cache
+            .filter(r => r.name !== '@everyone')
+            .map(role => ({
+                id: role.id,
+                name: role.name,
+                color: `#${role.color.toString(16).padStart(6, '0')}`,
+                members: role.members.size,
+                position: role.position
+            }))
+            .sort((a, b) => b.position - a.position);
+
+        const db = loadDB();
+        const serverLevelData = Object.values(db).filter(user => user.guild_id === serverId);
+        
+        const topUsers = await Promise.all(
+            serverLevelData
+                .sort((a, b) => (b.messages || 0) - (a.messages || 0))
+                .slice(0, 10)
+                .map(async user => {
+                    try {
+                        const discordUser = await client.users.fetch(user.user_id);
+                        return {
+                            userId: user.user_id,
+                            username: discordUser.username,
+                            avatar: discordUser.displayAvatarURL(),
+                            level: user.level,
+                            xp: user.xp,
+                            messages: user.messages
+                        };
+                    } catch {
+                        return {
+                            userId: user.user_id,
+                            username: 'Usuario Desconocido',
+                            avatar: null,
+                            level: user.level,
+                            xp: user.xp,
+                            messages: user.messages
+                        };
+                    }
+                })
+        );
+
+        const messageStats = [
+            { time: '00:00', mensajes: Math.floor(Math.random() * 200) + 50, comandos: Math.floor(Math.random() * 30) + 5 },
+            { time: '04:00', mensajes: Math.floor(Math.random() * 100) + 20, comandos: Math.floor(Math.random() * 15) + 2 },
+            { time: '08:00', mensajes: Math.floor(Math.random() * 400) + 200, comandos: Math.floor(Math.random() * 60) + 20 },
+            { time: '12:00', mensajes: Math.floor(Math.random() * 700) + 400, comandos: Math.floor(Math.random() * 100) + 50 },
+            { time: '16:00', mensajes: Math.floor(Math.random() * 900) + 600, comandos: Math.floor(Math.random() * 130) + 70 },
+            { time: '20:00', mensajes: Math.floor(Math.random() * 1000) + 800, comandos: Math.floor(Math.random() * 150) + 90 },
+            { time: '23:00', mensajes: Math.floor(Math.random() * 600) + 300, comandos: Math.floor(Math.random() * 80) + 40 }
+        ];
+
+        const serverData = {
+            id: guild.id,
+            name: guild.name,
+            icon: guild.iconURL({ size: 512 }) || null,
+            owner: {
+                id: guild.ownerId,
+                name: guild.members.cache.get(guild.ownerId)?.user.username || 'Unknown'
+            },
+            members: {
+                total: guild.memberCount,
+                online: onlineMembers,
+                offline: offlineMembers
+            },
+            channels: {
+                text: textChannels,
+                voice: voiceChannels,
+                categories: categories,
+                total: channels.size
+            },
+            roles: {
+                total: guild.roles.cache.size - 1,
+                list: roles.slice(0, 20)
+            },
+            bot: {
+                ping: client.ws.ping,
+                uptime: Math.floor(process.uptime())
+            },
+            stats: {
+                totalMessages: serverLevelData.reduce((sum, user) => sum + (user.messages || 0), 0),
+                topUsers: topUsers,
+                messageStats: messageStats
+            },
+            createdAt: guild.createdAt,
+            boostLevel: guild.premiumTier,
+            boostCount: guild.premiumSubscriptionCount || 0
+        };
+
+        res.json(serverData);
+    } catch (error) {
+        console.error('Error obteniendo datos del servidor:', error);
+        res.status(500).json({ error: 'Error al obtener datos del servidor', details: error.message });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║  🚀 Servidor API iniciado correctamente  ║');
+    console.log(`║  📡 Puerto: ${PORT.toString().padEnd(30)} ║`);
+    console.log('║  🔗 Esperando conexión del bot...        ║');
+    console.log('╚════════════════════════════════════════════╝\n');
+});
+
+process.on('unhandledRejection', (error) => {
+    console.error('❌ Error no manejado:', error);
+});
