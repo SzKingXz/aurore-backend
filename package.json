@@ -6,12 +6,17 @@
   "scripts": {
     "start": "node server.cjs"
   },
-  "keywords": ["discord", "bot", "dashboard"],
+  "keywords": [
+    "discord",
+    "bot",
+    "dashboard"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "discord.js": "^14.14.1"
+    "discord.js": "^14.14.1",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2"
   }
 }
