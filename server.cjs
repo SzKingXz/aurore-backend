@@ -170,8 +170,6 @@ app.get('/api/auth/callback', async (req, res) => {
         res.redirect(`${FRONTEND_URL}?error=auth_failed`);
     }
 });
-    }
-});
 
 // Bot info
 app.get('/api/bot/info', (req, res) => {
