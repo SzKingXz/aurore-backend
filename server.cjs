@@ -376,7 +376,7 @@ app.get('/api/server/:serverId', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log('\n╔════════════════════════════════════════════╗');
     console.log('║  🚀 Servidor API iniciado correctamente  ║');
     console.log(`║  📡 Puerto: ${PORT.toString().padEnd(30)} ║`);
