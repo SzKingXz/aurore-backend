@@ -10,6 +10,13 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Debug: Verificar variables de entorno en producción
+console.log('🔍 Debug - Variables de entorno:');
+console.log('PORT:', PORT);
+console.log('CLIENT_ID:', process.env.DISCORD_CLIENT_ID ? '✅ Configurado' : '❌ Falta');
+console.log('CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? '✅ Configurado' : '❌ Falta');
+console.log('BOT_TOKEN:', process.env.DISCORD_BOT_TOKEN ? '✅ Configurado' : '❌ Falta');
+
 // Configuración OAuth2
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
@@ -380,8 +387,17 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('\n╔════════════════════════════════════════════╗');
     console.log('║  🚀 Servidor API iniciado correctamente  ║');
     console.log(`║  📡 Puerto: ${PORT.toString().padEnd(30)} ║`);
+    console.log(`║  🌐 Escuchando en: 0.0.0.0:${PORT}`.padEnd(45) + '║');
     console.log('║  🔗 Esperando conexión del bot...        ║');
     console.log('╚════════════════════════════════════════════╝\n');
+    console.log('📋 Endpoints registrados:');
+    console.log('   GET  /');
+    console.log('   GET  /api/health');
+    console.log('   GET  /api/auth/discord');
+    console.log('   GET  /api/auth/callback');
+    console.log('   GET  /api/bot/info');
+    console.log('   GET  /api/user/servers');
+    console.log('   GET  /api/server/:serverId\n');
 });
 
 process.on('unhandledRejection', (error) => {
