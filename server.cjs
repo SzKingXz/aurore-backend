@@ -1,5 +1,11 @@
 // server.cjs - Backend con Discord OAuth2
-require('dotenv').config();
+// Solo cargar dotenv en desarrollo (cuando no hay NODE_ENV o es development)
+if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
+    require('dotenv').config();
+    console.log('📝 Dotenv cargado (desarrollo local)');
+} else {
+    console.log('☁️ Producción - usando variables de entorno del sistema');
+}
 
 const express = require('express');
 const cors = require('cors');
