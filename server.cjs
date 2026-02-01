@@ -14,10 +14,18 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+// CRITICAL FIX: Render DEBE usar su PORT dinámico, no 3001
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+
+// Verificar que estamos en producción con el PORT correcto
+if (process.env.NODE_ENV === 'production' && PORT === 3001) {
+    console.error('⚠️ ERROR: Render debe asignar PORT automáticamente');
+    console.error('⚠️ Si ves 3001 en producción, hay un problema de configuración');
+}
 
 // Debug: Verificar variables de entorno en producción
 console.log('🔍 Debug - Variables de entorno:');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('PORT:', PORT);
 console.log('CLIENT_ID:', process.env.DISCORD_CLIENT_ID ? '✅ Configurado' : '❌ Falta');
 console.log('CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? '✅ Configurado' : '❌ Falta');
